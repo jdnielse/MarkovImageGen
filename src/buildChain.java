@@ -50,7 +50,7 @@ public class buildChain {
 		for (File input : inputFiles) {
 			// just steal the last info we saw...
 			stolenInfo = new buildChain().analyzeImage(input, troutchain, generalCounts);
-			System.out.println(troutchain.toString());
+			// System.out.println(troutchain.toString());
 		}
 
 		// calculate probabilities based on counts
@@ -92,7 +92,7 @@ public class buildChain {
 			for (RGB chancePixel : generalCounts.keySet()) {
 				generalProb.put(chancePixel, generalCounts.get(chancePixel).doubleValue() / totalCount.doubleValue());
 			}
-			System.out.println(generalProb.toString());
+			// System.out.println(generalProb.toString());
 
 			// initialize img to weighted random
 			for (int i = 0; i < img.length; i++) {
@@ -115,12 +115,13 @@ public class buildChain {
 				}
 			}
 
-//			 generateRandom(troutchain, generator, img);
-//			 generateRandomWalk(troutchain, generator, img);
-//			 generateDiagonalStripesConcat(troutchain, generator, img);
-			generateDiagonalStripesConcatRemoveNonCommon(troutchain, generator, img, generalProb);
+			// generateRandom(troutchain, generator, img);
+			// generateRandomWalk(troutchain, generator, img);
+			// generateDiagonalStripesConcat(troutchain, generator, img);
+			// generateDiagonalStripesConcatRemoveNonCommonNormalize(troutchain, generator, img, generalProb);
+			generateVerticalStripesConcatRemoveNonCommonNormalize(troutchain, generator, img, generalProb);
 
-//			 generateDiagonalStripes(probs, generator, img);
+			// generateDiagonalStripes(probs, generator, img);
 
 			// convert the 2d array of RGB to imagelines
 			for (int i = 0; i < WIDTH; i++) {
@@ -480,7 +481,7 @@ public class buildChain {
 		}
 	}
 
-	private void generateDiagonalStripesConcatRemoveNonCommon(Map<RGB, Map<RGB, Long>> troutchain, Random generator, RGB[][] img, Map<RGB, Double> generalProb) {
+	private void generateDiagonalStripesConcatRemoveNonCommonNormalize(Map<RGB, Map<RGB, Long>> troutchain, Random generator, RGB[][] img, Map<RGB, Double> generalProb) {
 		int noshared = 0;
 		int badProb = 0;
 		for (int i = 0; i < img.length; i++) {
@@ -541,8 +542,8 @@ public class buildChain {
 					} else {
 
 						// calculate each chance map
-						//for each adjacent pixel, caluclate the what probability each color has of being chosen (0.0 - 1.0)
-						//to do this, count the total number of occurances
+						// for each adjacent pixel, caluclate the what probability each color has of being chosen (0.0 - 1.0)
+						// to do this, count the total number of occurances
 						Map<RGB, Double> leftChance = new HashMap<>();
 						Long leftCount = 0L;
 						for (Entry<RGB, Long> numCounts : troutchain.get(img[i - 1][j]).entrySet()) {
@@ -681,9 +682,225 @@ public class buildChain {
 		System.out.println(badProb + " ur bad at this many probabilities");
 	}
 
+	private void generateVerticalStripesConcatRemoveNonCommonNormalize(Map<RGB, Map<RGB, Long>> troutchain, Random generator, RGB[][] img, Map<RGB, Double> generalProb) {
+		int noshared = 0;
+		int badProb = 0;
+		for (int i = 0; i < img.length; i++) {
+			for (int j = 0; j < img[i].length; j++) {
+				if (i - 1 < 0 || i + 1 >= img.length || j - 1 < 0 || j + 1 >= img[i].length) {
+					continue;
+				} else {
+					// otherwise we need to pick a color based on our
+					// neighbor colors
+					// lets try top left, top, and left
+					// TODO how to concat probabilities?
+					// CHANGE CHANGE CHANGE just use left for now lol
+					RGB pickedPixel = null;
+					Map<RGB, Double> concatChance = new HashMap<>();
+					// concat to our map
+
+					// to normalize chances, need to make each countmap count
+					// for 1/3rd max
+					// TODO get totalcount from all 3 count maps
+					// get totalcount from each individual map
+					//
+					// JUST CONCAT CHANCE MAPS * .333333
+
+					// remove colors that aren't shared by all 3
+					Set<RGB> leftColors = new HashSet<>(troutchain.get(img[i - 1][j]).keySet());
+					Set<RGB> topColors = new HashSet<>(troutchain.get(img[i][j - 1]).keySet());
+					Set<RGB> topleftColors = new HashSet<>(troutchain.get(img[i - 1][j - 1]).keySet());
+					Set<RGB> toprightColors = new HashSet<>(troutchain.get(img[i -1][j + 1]).keySet());
+
+					Set<RGB> sharedColors = new HashSet<>();
+					// sharedColors.addAll(lefts);
+					// sharedColors.addAll(tops);
+					sharedColors.addAll(topColors);
+					sharedColors.retainAll(topleftColors);
+					sharedColors.retainAll(leftColors);
+					sharedColors.retainAll(toprightColors);
+					if (sharedColors.isEmpty()) {
+						// our neighbors don't share any colors, just pick a
+						// rando I guess
+						Double totalWeight = 0.0;
+						double rando = generator.nextDouble();
+						for (RGB possiblePixel : generalProb.keySet()) {
+							totalWeight += generalProb.get(possiblePixel);
+							if (rando <= totalWeight) {
+								pickedPixel = possiblePixel;
+								break;
+							}
+						}
+						noshared++;
+					} else {
+
+						// calculate each chance map
+						// for each adjacent pixel, caluclate the what probability each color has of being chosen (0.0 - 1.0)
+						// to do this, count the total number of occurances
+						Map<RGB, Double> leftChance = new HashMap<>();
+						Long leftCount = 0L;
+						for (Entry<RGB, Long> numCounts : troutchain.get(img[i - 1][j]).entrySet()) {
+							if (sharedColors.contains(numCounts.getKey())) {
+								leftCount += numCounts.getValue();
+							}
+						}
+						for (Entry<RGB, Long> chancePixel : troutchain.get(img[i - 1][j]).entrySet()) {
+							if (sharedColors.contains(chancePixel.getKey())) {
+								leftChance.put(chancePixel.getKey(), (chancePixel.getValue().doubleValue() / leftCount.doubleValue()));
+							}
+						}
+
+						Map<RGB, Double> topleftChance = new HashMap<>();
+						Long topleftCount = 0L;
+						for (Entry<RGB, Long> numCounts : troutchain.get(img[i - 1][j - 1]).entrySet()) {
+							if (sharedColors.contains(numCounts.getKey())) {
+								topleftCount += numCounts.getValue();
+							}
+						}
+						for (Entry<RGB, Long> chancePixel : troutchain.get(img[i - 1][j - 1]).entrySet()) {
+							if (sharedColors.contains(chancePixel.getKey())) {
+								topleftChance.put(chancePixel.getKey(), (chancePixel.getValue().doubleValue() / topleftCount.doubleValue()));
+							}
+						}
+
+						Map<RGB, Double> topChance = new HashMap<>();
+						Long topCount = 0L;
+						for (Entry<RGB, Long> numCounts : troutchain.get(img[i][j - 1]).entrySet()) {
+							if (sharedColors.contains(numCounts.getKey())) {
+								topCount += numCounts.getValue();
+							}
+						}
+						for (Entry<RGB, Long> chancePixel : troutchain.get(img[i][j - 1]).entrySet()) {
+							if (sharedColors.contains(chancePixel.getKey())) {
+								topChance.put(chancePixel.getKey(), (chancePixel.getValue().doubleValue() / topCount.doubleValue()));
+							}
+						}
+						
+
+						Map<RGB, Double> toprightChance = new HashMap<>();
+						Long toprightCount = 0L;
+						for (Entry<RGB, Long> numCounts : troutchain.get(img[i-1][j + 1]).entrySet()) {
+							if (sharedColors.contains(numCounts.getKey())) {
+								toprightCount += numCounts.getValue();
+							}
+						}
+						for (Entry<RGB, Long> chancePixel : troutchain.get(img[i-1][j + 1]).entrySet()) {
+							if (sharedColors.contains(chancePixel.getKey())) {
+								toprightChance.put(chancePixel.getKey(), (chancePixel.getValue().doubleValue() / toprightCount.doubleValue()));
+							}
+						}
+						// find out if we actually have chances from all sides
+						int sidesWithChances = 0;
+						if (!leftChance.isEmpty()) {
+							sidesWithChances++;
+						}
+						if (!topChance.isEmpty()) {
+							sidesWithChances++;
+						}
+						if (!topleftChance.isEmpty()) {
+							sidesWithChances++;
+						}
+						if (!toprightChance.isEmpty()) {
+							sidesWithChances++;
+						}
+						if (sidesWithChances == 0) {
+							// no possible color, pick random?
+							// should be impossible to reach this point since we
+							// know at least one side has a valid color choice
+							throw new RuntimeException("Should be impossible to get here bro, gj");
+						}
+
+						// it's possible that an adjacent pixel will have no
+						// choices, so need to count one less side in the
+						// normalization process
+						// in this case, we expect sidesWithChances to be 3 most
+						// of the time
+						for (Entry<RGB, Double> chance : leftChance.entrySet()) {
+							if (concatChance.containsKey(chance.getKey())) {
+								concatChance.put(chance.getKey(), concatChance.get(chance.getKey()) + (chance.getValue() * (1.0 / (double) sidesWithChances)));
+							} else {
+								concatChance.put(chance.getKey(), chance.getValue() * (1.0 / (double) sidesWithChances));
+							}
+						}
+						for (Entry<RGB, Double> chance : topleftChance.entrySet()) {
+							if (concatChance.containsKey(chance.getKey())) {
+								concatChance.put(chance.getKey(), concatChance.get(chance.getKey()) + (chance.getValue() * (1.0 / (double) sidesWithChances)));
+							} else {
+								concatChance.put(chance.getKey(), chance.getValue() * (1.0 / (double) sidesWithChances));
+							}
+						}
+						for (Entry<RGB, Double> chance : topChance.entrySet()) {
+							if (concatChance.containsKey(chance.getKey())) {
+								concatChance.put(chance.getKey(), concatChance.get(chance.getKey()) + (chance.getValue() * (1.0 / (double) sidesWithChances)));
+							} else {
+								concatChance.put(chance.getKey(), chance.getValue() * (1.0 / (double) sidesWithChances));
+							}
+						}
+						for (Entry<RGB, Double> chance : toprightChance.entrySet()) {
+							if (concatChance.containsKey(chance.getKey())) {
+								concatChance.put(chance.getKey(), concatChance.get(chance.getKey()) + (chance.getValue() * (1.0 / (double) sidesWithChances)));
+							} else {
+								concatChance.put(chance.getKey(), chance.getValue() * (1.0 / (double) sidesWithChances));
+							}
+						}
+
+						// now we have a concatenated map of counts, pick what
+						// color
+						// we're gonna be!
+						// concat our 3 chance maps
+						Double totalWeight = 0.0;
+						double rando = generator.nextDouble();
+						for (RGB possiblePixel : concatChance.keySet()) {
+							totalWeight += concatChance.get(possiblePixel);
+							if (rando <= totalWeight) {
+								pickedPixel = possiblePixel;
+								break;
+							}
+						}
+						// System.out.println("For point: " + i + ", " + j);
+						// System.out.println("My neighbors were: " + img[i -
+						// 1][j] + ", " + img[i - 1][j - 1] + ", " + img[i][j -
+						// 1]);
+						// System.out.println("My chances are: " +
+						// concatChance.toString());
+						// System.out.println("I picked: " +
+						// pickedPixel.toString());
+					}
+					if (pickedPixel == null) {
+						Double totalChance = 0.0;
+						for (Double chance : concatChance.values()) {
+							totalChance += chance;
+						}
+						System.out.println("Had a chance total of: " + totalChance);
+						System.out.println(noshared + " pixels had no colors in common");
+						System.out.println("Shared colors: " + sharedColors.toString());
+						System.out.println("For point: " + i + ", " + j);
+						System.out.println("My neighbors were: " + img[i - 1][j] + ", " + img[i - 1][j - 1] + ", " + img[i][j - 1]);
+						System.out.println("My chances are: " + concatChance.toString());
+
+						badProb++;
+						Double totalWeight = 0.0;
+						double rando = generator.nextDouble();
+						for (RGB possiblePixel : generalProb.keySet()) {
+							totalWeight += generalProb.get(possiblePixel);
+							if (rando <= totalWeight) {
+								pickedPixel = possiblePixel;
+								break;
+							}
+						}
+						// throw new RuntimeException("fix your probability
+						// code, dummy");
+					}
+					img[i][j] = pickedPixel;
+				}
+			}
+		}
+		System.out.println(noshared + " pixels had no colors in common");
+		System.out.println(badProb + " ur bad at this many probabilities");
+	}
+
 	/**
-	 * Turns total counts of occurrence into chance/1 that that color will be
-	 * picked
+	 * Turns total counts of occurrence into chance/1 that that color will be picked
 	 * 
 	 * @param troutchain
 	 * @return
